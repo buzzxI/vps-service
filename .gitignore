@@ -1,0 +1,85 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# SSL Certificates and Keys (SECURITY SENSITIVE)
+ssl/
+*.crt
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Service Data and Logs
+xray/data/
+xray/logs/
+hysteria2/data/
+hysteria2/logs/
+nginx/log/
+*/logs/
+*.log
+
+# Environment Variables (may contain secrets)
+.env.local
+.env.production
+.env.staging
+
+# Backup files
+backup/
+*.backup
+*.bak
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Docker
+.docker/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js (if you add any Node.js tools later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if you add any Python scripts later)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Generated config files (optional - you might want to track these)
+# xray/config.json
+# hysteria2/config.yaml
+# nginx/nginx.conf

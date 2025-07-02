@@ -1,52 +1,6 @@
 version: '3.8'
 
 services:
-  # ACME client for SSL certificate management
-  acme:
-    image: neilpang/acme.sh
-    container_name: vps-acme
-    environment:
-      - DOMAIN=${DOMAIN}
-      # DNS provider credentials (uncomment and configure as needed)
-      - CF_Token=${CLOUDFLARE_API_TOKEN}  # For Cloudflare
-      - CF_Account_ID=${CLOUDFLARE_ACCOUNT_ID}
-      - CF_Zone_ID=${CLOUDFLARE_ZONE_ID} # Optional, if needed
-    volumes:
-      - ./ssl:/etc/ssl/certs
-    networks:
-      - vps-network
-    # one time service
-    restart: "no"
-    command: >
-      sh -c "
-        # Check if certificates already exist
-        if [ -f /etc/ssl/certs/fullchain.crt ] && [ -f /etc/ssl/certs/cert.key ]; then
-          echo 'Certificates already exist, skipping certificate generation'
-          echo 'Certificate info:'
-          openssl x509 -in /etc/ssl/certs/fullchain.crt -noout -dates -subject 2>/dev/null || echo 'Could not read certificate info'
-          exit 0
-        fi
-
-        echo 'No existing certificates found, generating new ones...'
-        acme.sh --set-default-ca --server letsencrypt_test
-        #acme.sh --set-default-ca --server letsencrypt
-
-        # Generate ECC certificate 
-        echo 'Using Cloudflare DNS validation'
-        acme.sh --issue --dns dns_cf -d ${DOMAIN} --keylength ec-256 --force
-
-        # Install certificates
-        acme.sh --installcert -d ${DOMAIN} \\
-          --cert-file /etc/ssl/certs/cert.crt \\
-          --key-file /etc/ssl/certs/cert.key \\
-          --fullchain-file /etc/ssl/certs/fullchain.crt \\
-          --ecc 
-        
-        # Set permissions for the certificates
-        chmod 644 /etc/ssl/certs/* 
-        echo 'ECC Certificates generated successfully'
-      "
-
   nginx:
     image: nginx:alpine
     container_name: vps-nginx
@@ -83,8 +37,6 @@ services:
     networks:
       - vps-network
     restart: unless-stopped
-    depends_on:
-      - acme
     command: >
       sh -c "
         # Create data directory if it doesn't exist
@@ -150,8 +102,6 @@ services:
     environment:
       - REALITY_DOMAIN=${REALITY_DOMAIN}
     restart: unless-stopped
-    depends_on:
-      - acme
     command: >
       sh -c "
         # Create data directory if it doesn't exist
@@ -177,59 +127,6 @@ services:
         
         # Start Hysteria2
         exec hysteria server -c /etc/hysteria/config.yaml
-      "
-
-  # Certificate renewal service
-  cert-renew:
-    image: neilpang/acme.sh
-    container_name: vps-cert-renew
-    environment:
-      - DOMAIN=${DOMAIN}
-      # DNS provider credentials (same as acme service)
-      - CF_Token=${CLOUDFLARE_API_TOKEN}
-      - CF_Account_ID=${CLOUDFLARE_ACCOUNT_ID}
-      - CF_Zone_ID=${CLOUDFLARE_ZONE_ID} # Optional, if needed
-    volumes:
-      - ./ssl:/etc/ssl/certs
-      - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
-    networks:
-      - vps-network
-    restart: unless-stopped
-    command: >
-      sh -c "
-        # Install Docker CLI in the container
-        apk add --no-cache docker-cli &&
-        
-        # Initialize acme.sh if not already done
-        if [ ! -f /acme.sh/account.conf ]; then
-          echo 'Initializing acme.sh configuration...'
-          acme.sh --set-default-ca --server letsencrypt
-        fi
-        
-        echo 'Starting certificate renewal service...'
-        while true; do
-          sleep 86400 # Check every 24 hours
-          echo 'Checking for certificate renewal...'
-          
-          # Check if the certificate needs renewal and renew if necessary
-          if acme.sh --cron --home /acme.sh; then
-            echo 'Certificate renewed successfully'
-            
-            # Reinstall certificates to ensure they are in the right location
-            acme.sh --installcert -d $${DOMAIN} \\
-              --cert-file /etc/ssl/certs/cert.crt \\
-              --key-file /etc/ssl/certs/cert.key \\
-              --fullchain-file /etc/ssl/certs/fullchain.crt \\
-              --ecc
-            chmod 644 /etc/ssl/certs/* 
-            # Reload services to apply new certificates
-            echo 'Reloading services with new certificates...'
-            docker kill -s HUP vps-nginx vps-xray vps-hysteria2 2>/dev/null || true
-            echo 'Services reloaded'
-          else
-            echo 'No certificate renewal needed'
-          fi
-        done
       "
 
 networks:
