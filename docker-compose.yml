@@ -10,7 +10,7 @@ services:
     expose:
       - "5424" # static webpage (Expose port for internal communication)
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
       - ./nginx/log:/var/log/nginx # Log directory for nginx
       - ./nginx/webpage:/usr/share/nginx/webpage
     environment:
@@ -19,6 +19,20 @@ services:
     networks:
       - vps-network
     restart: unless-stopped
+    command: >
+      sh -c "
+        # Install envsubst (gettext package)
+        apk add --no-cache gettext
+        
+        # Generate nginx.conf from template with environment variables
+        envsubst < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+        
+        # Test nginx configuration
+        nginx -t
+        
+        # Start nginx
+        exec nginx -g 'daemon off;'
+      "
 
   xray:
     image: teddysun/xray
