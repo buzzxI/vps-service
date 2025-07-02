@@ -1,0 +1,18 @@
+listen: :443
+speedTest: true
+tls: 
+  cert: /etc/hysteria/ssl/fullchain.crt
+  key: /etc/hysteria/ssl/cert.key
+  sniGuard: strict
+
+auth:
+  type: userpass
+  userpass:
+    buzz: ${HYSTERIA2_PASSWORD}  
+
+masquerade: # 伪装
+  type: proxy
+  proxy:
+    url: https://${REALITY_DOMAIN}
+    rewriteHost: true
+    insecure: false

@@ -1,0 +1,237 @@
+version: '3.8'
+
+services:
+  # ACME client for SSL certificate management
+  acme:
+    image: neilpang/acme.sh
+    container_name: vps-acme
+    environment:
+      - DOMAIN=${DOMAIN}
+      # DNS provider credentials (uncomment and configure as needed)
+      - CF_Token=${CLOUDFLARE_API_TOKEN}  # For Cloudflare
+      - CF_Account_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - CF_Zone_ID=${CLOUDFLARE_ZONE_ID} # Optional, if needed
+    volumes:
+      - ./ssl:/etc/ssl/certs
+    networks:
+      - vps-network
+    # one time service
+    restart: "no"
+    command: >
+      sh -c "
+        # Check if certificates already exist
+        if [ -f /etc/ssl/certs/fullchain.crt ] && [ -f /etc/ssl/certs/cert.key ]; then
+          echo 'Certificates already exist, skipping certificate generation'
+          echo 'Certificate info:'
+          openssl x509 -in /etc/ssl/certs/fullchain.crt -noout -dates -subject 2>/dev/null || echo 'Could not read certificate info'
+          exit 0
+        fi
+
+        echo 'No existing certificates found, generating new ones...'
+        acme.sh --set-default-ca --server letsencrypt_test
+        #acme.sh --set-default-ca --server letsencrypt
+
+        # Generate ECC certificate 
+        echo 'Using Cloudflare DNS validation'
+        acme.sh --issue --dns dns_cf -d ${DOMAIN} --keylength ec-256 --force
+
+        # Install certificates
+        acme.sh --installcert -d ${DOMAIN} \\
+          --cert-file /etc/ssl/certs/cert.crt \\
+          --key-file /etc/ssl/certs/cert.key \\
+          --fullchain-file /etc/ssl/certs/fullchain.crt \\
+          --ecc 
+        
+        # Set permissions for the certificates
+        chmod 644 /etc/ssl/certs/* 
+        echo 'ECC Certificates generated successfully'
+      "
+
+  nginx:
+    image: nginx:alpine
+    container_name: vps-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "5424" # static webpage (Expose port for internal communication)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/log:/var/log/nginx # Log directory for nginx
+      - ./nginx/webpage:/usr/share/nginx/webpage
+    environment:
+      - DOMAIN=${DOMAIN}
+      - REALITY_DOMAIN=${REALITY_DOMAIN}
+    networks:
+      - vps-network
+    restart: unless-stopped
+
+  xray:
+    image: teddysun/xray
+    container_name: vps-xray
+    expose:
+      - "4075"    # VLESS port for nginx SNI routing
+      - "2992"    # Reality port for nginx SNI routing
+    volumes:
+      - ./xray/config.json.template:/etc/xray/config.json.template:ro
+      - ./xray/logs:/var/log/xray
+      - ./ssl:/etc/xray/ssl:ro # Read-only access to SSL certificates
+      - ./xray/data:/etc/xray/data # Persistent data directory
+    environment:
+      - DOMAIN=${DOMAIN}
+      - REALITY_DOMAIN=${REALITY_DOMAIN}
+    networks:
+      - vps-network
+    restart: unless-stopped
+    depends_on:
+      - acme
+    command: >
+      sh -c "
+        # Create data directory if it doesn't exist
+        mkdir -p /etc/xray/data
+        
+        # Generate UUID if it doesn't exist
+        if [ ! -f /etc/xray/data/uuid.txt ]; then
+          echo 'Generating new UUID for Xray...'
+          xray uuid > /etc/xray/data/uuid.txt
+          echo 'UUID generated and saved to /etc/xray/data/uuid.txt'
+        fi
+        
+        # Generate x25519 key pair for Reality if it doesn't exist
+        if [ ! -f /etc/xray/data/reality_private.key ] || [ ! -f /etc/xray/data/reality_public.key ]; then
+          echo 'Generating new x25519 key pair for Reality...'
+          # Generate key pair and save to temporary file
+          xray x25519 > /etc/xray/data/key_output.txt
+          
+          # Extract private key 
+          grep 'Private key:' /etc/xray/data/key_output.txt | cut -d' ' -f3 > /etc/xray/data/reality_private.key
+          
+          # Extract public key
+          grep 'Public key:' /etc/xray/data/key_output.txt | cut -d' ' -f3 > /etc/xray/data/reality_public.key
+          
+          # Clean up temporary file
+          #rm /etc/xray/data/key_output.txt
+          
+          echo 'Reality key pair generated and saved:'
+          echo 'Private key saved to /etc/xray/data/reality_private.key'
+          echo 'Public key saved to /etc/xray/data/reality_public.key'
+        fi
+        
+        # Read generated values and export them
+        export XRAY_UUID=$(cat /etc/xray/data/uuid.txt)
+        export REALITY_PRIVATE_KEY=$(cat /etc/xray/data/reality_private.key)
+        export REALITY_PUBLIC_KEY=$(cat /etc/xray/data/reality_public.key)
+        
+        echo 'Using UUID:' $$XRAY_UUID
+        echo 'Using Reality Private Key:' $$REALITY_PRIVATE_KEY
+        echo 'Using Reality Public Key:' $$REALITY_PUBLIC_KEY
+        
+        # Install envsubst (gettext package)
+        apk add --no-cache gettext
+        
+        # Generate config from template with environment variables
+        envsubst < /etc/xray/config.json.template > /etc/xray/config.json
+        
+        # Start Xray
+        exec xray run -c /etc/xray/config.json
+      "
+
+  hysteria2:
+    image: tobyxdd/hysteria
+    container_name: vps-hysteria2
+    ports:
+      - "443:443/udp"
+    volumes:
+      - ./hysteria2/config.yaml:/etc/tehysteria/config.yaml.template:ro
+      - ./hysteria2/data:/etc/hysteria/data
+      - ./ssl:/etc/hysteria/ssl:ro
+    networks:
+      - vps-network
+    environment:
+      - REALITY_DOMAIN=${REALITY_DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      - acme
+    command: >
+      sh -c "
+        # Create data directory if it doesn't exist
+        mkdir -p /etc/hysteria/data
+        
+        # Generate password if it doesn't exist
+        if [ ! -f /etc/hysteria/data/password.txt ]; then
+          echo 'Generating new password for Hysteria2...'
+          # Generate a secure 32-character password
+          tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 > /etc/hysteria/data/password.txt
+          echo 'Hysteria2 password generated and saved'
+        fi
+        
+        # Read generated password and export it
+        export HYSTERIA2_PASSWORD=$(cat /etc/hysteria/data/password.txt)
+        echo 'Using Hysteria2 Password:' $HYSTERIA2_PASSWORD
+        
+        # Install envsubst (gettext package)
+        apk add --no-cache gettext
+        
+        # Generate config from template with environment variables
+        envsubst < /etc/hysteria/config.yaml.template > /etc/hysteria/config.yaml
+        
+        # Start Hysteria2
+        exec hysteria server -c /etc/hysteria/config.yaml
+      "
+
+  # Certificate renewal service
+  cert-renew:
+    image: neilpang/acme.sh
+    container_name: vps-cert-renew
+    environment:
+      - DOMAIN=${DOMAIN}
+      # DNS provider credentials (same as acme service)
+      - CF_Token=${CLOUDFLARE_API_TOKEN}
+      - CF_Account_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - CF_Zone_ID=${CLOUDFLARE_ZONE_ID} # Optional, if needed
+    volumes:
+      - ./ssl:/etc/ssl/certs
+      - /var/run/docker.sock:/var/run/docker.sock  # Mount Docker socket
+    networks:
+      - vps-network
+    restart: unless-stopped
+    command: >
+      sh -c "
+        # Install Docker CLI in the container
+        apk add --no-cache docker-cli &&
+        
+        # Initialize acme.sh if not already done
+        if [ ! -f /acme.sh/account.conf ]; then
+          echo 'Initializing acme.sh configuration...'
+          acme.sh --set-default-ca --server letsencrypt
+        fi
+        
+        echo 'Starting certificate renewal service...'
+        while true; do
+          sleep 86400 # Check every 24 hours
+          echo 'Checking for certificate renewal...'
+          
+          # Check if the certificate needs renewal and renew if necessary
+          if acme.sh --cron --home /acme.sh; then
+            echo 'Certificate renewed successfully'
+            
+            # Reinstall certificates to ensure they are in the right location
+            acme.sh --installcert -d $${DOMAIN} \\
+              --cert-file /etc/ssl/certs/cert.crt \\
+              --key-file /etc/ssl/certs/cert.key \\
+              --fullchain-file /etc/ssl/certs/fullchain.crt \\
+              --ecc
+            chmod 644 /etc/ssl/certs/* 
+            # Reload services to apply new certificates
+            echo 'Reloading services with new certificates...'
+            docker kill -s HUP vps-nginx vps-xray vps-hysteria2 2>/dev/null || true
+            echo 'Services reloaded'
+          else
+            echo 'No certificate renewal needed'
+          fi
+        done
+      "
+
+networks:
+  vps-network:
+    driver: bridge

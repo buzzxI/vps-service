@@ -1,0 +1,168 @@
+// REFERENCE:
+// https://github.com/XTLS/Xray-examples
+// https://xtls.github.io/config/
+// 常用的 config 文件，不论服务器端还是客户端，都有 5 个部分。外加小小白解读：
+// ┌─ 1*log 日志设置 - 日志写什么，写哪里（出错时有据可查）
+// ├─ 2_dns DNS-设置 - DNS 怎么查（防 DNS 污染、防偷窥、避免国内外站匹配到国外服务器等）
+// ├─ 3_routing 分流设置 - 流量怎么分类处理（是否过滤广告、是否国内外分流）
+// ├─ 4_inbounds 入站设置 - 什么流量可以流入 Xray
+// └─ 5_outbounds 出站设置 - 流出 Xray 的流量往哪里去
+{
+  // 1\_日志设置
+  "log": {
+    "loglevel": "warning", // 内容从少到多: "none", "error", "warning", "info", "debug"
+    "access": "/var/log/xray/access.log", // 访问记录
+    "error": "/var/log/xray/error.log" // 错误记录
+  },
+  // 2_DNS 设置
+  "dns": {
+    "servers": [
+      "https+local://1.1.1.1/dns-query", // 首选 1.1.1.1 的 DoH 查询，牺牲速度但可防止 ISP 偷窥
+      "localhost"
+    ]
+  },
+  // 3*分流设置
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      // 3.1 防止服务器本地流转问题：如内网被攻击或滥用、错误的本地回环等
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private" // 分流条件：geoip 文件内，名为"private"的规则（本地）
+        ],
+        "outboundTag": "block" // 分流策略：交给出站"block"处理（黑洞屏蔽）
+      },
+      {
+        // 3.2 防止服务器直连国内
+        "type": "field",
+        "ip": ["geoip:cn"],
+        "outboundTag": "block"
+      },
+      // 3.3 屏蔽广告
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ads-all" // 分流条件：geosite 文件内，名为"category-ads-all"的规则（各种广告域名）
+        ],
+        "outboundTag": "block" // 分流策略：交给出站"block"处理（黑洞屏蔽）
+      }
+    ]
+  },
+  // 4*入站设置
+  // 4.1 这里只写了一个最简单的 vless+xtls 的入站，因为这是 Xray 最强大的模式。如有其他需要，请根据模版自行添加。
+  // xray inbound config -> listening port 4075
+  "inbounds": [
+    {
+      "port": 4075,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "${XRAY_UUID}", // 填写你的 UUID
+            "flow": "xtls-rprx-vision",
+            "level": 0,
+            "email": "buzz@${DOMAIN}"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "dest": 5424 // default fallback to nginx (static webpage)
+          },
+          {
+            "path": "/websocket", // path '/websocket' falls back to websocket config
+            "dest": 510,
+            "xver": 1
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "alpn": "http/1.1",
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray/ssl/fullchain.crt",
+              "keyFile": "/etc/xray/ssl/cert.key"
+            }
+          ]
+        }
+      }
+    },
+    {
+        "port": 510,
+        "listen": "127.0.0.1",
+        "protocol": "vless",
+        "settings": {
+            "clients": [
+                {
+                    "id": "${XRAY_UUID}", // 填写你的 UUID
+                    "level": 0,
+                    "email": "buzz@${DOMAIN}"
+                }
+            ],
+            "decryption": "none"
+        },
+         "streamSettings": {
+            "network": "ws",
+            "security": "none",
+            "wsSettings": {
+                "acceptProxyProtocol": true, // 提醒：若你用 Nginx/Caddy 等反代 WS，需要删掉这行
+                "path": "/websocket" // 必须换成自定义的 PATH，需要和上面的一致
+            }
+        }
+    },
+    {
+        "tag": "xray-xtls-reality",
+        "listen": "0.0.0.0",
+        "port": 2992,
+        "protocol": "vless",
+        "settings": {
+            "clients": [
+                {
+                    "id": "${XRAY_UUID}", // 可以使用 xray uuid 生成，注意保存
+                    "flow": "xtls-rprx-vision"
+                }
+            ],
+            "decryption": "none"
+        },
+        "streamSettings": {
+            "network": "tcp",
+            "security": "reality",
+            "realitySettings": {
+                "dest": "${REALITY_DOMAIN}:443", // 自行设置合适的回落域名，必须带端口，比如：www.example.com:443
+                "serverNames": [
+                    "${REALITY_DOMAIN}" // 自行设置客户端可用的 server name 列表，例如：www.example.com
+                ],
+                "privateKey": "${REALITY_PRIVATE_KEY}", // 可以使用 xray x25519 生成
+                "shortIds": [
+                    ""
+                ]
+            }
+        },
+        "sniffing": {
+            "enabled": true,
+            "destOverride": [
+                "http",
+                "tls",
+                "quic"
+            ]
+        }
+    }
+  ],
+  // 5*出站设置
+  "outbounds": [
+    // 5.1 第一个出站是默认规则，freedom 就是对外直连（vps 已经是外网，所以直连）
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    // 5.2 屏蔽规则，blackhole 协议就是把流量导入到黑洞里（屏蔽）
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ]
+}
