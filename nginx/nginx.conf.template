@@ -48,12 +48,6 @@ http {
         server {
                 listen 80;
                 server_name ${DOMAIN};
-
-                # ACME webroot validation path
-                location /.well-known/acme-challenge/ {
-                    root /usr/share/nginx/webpage;
-                    try_files $uri =404;
-                }
         
                 # Redirect other HTTP traffic to HTTPS
                 location / {
