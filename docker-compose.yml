@@ -140,6 +140,19 @@ services:
         exec hysteria server -c /etc/hysteria/config.yaml
       "
 
+  openlist:
+    image: 'openlistteam/openlist:beta-aio'
+    container_name: vps-openlist
+    volumes:
+      - './openlist/data:/opt/openlist/data'
+    expose:
+      - '5244'
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+    restart: unless-stopped
+
 networks:
   vps-network:
     driver: bridge

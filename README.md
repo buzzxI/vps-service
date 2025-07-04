@@ -23,3 +23,5 @@ the docker compose deploy three entries:
 
 file `.env` contains a reality domain, this domain is necessory for `vless + reality` proxy, you can leave it alone, if hysteria2 and websocket is just fine
 
+by default vps serve as a openlist server (or a static webpage)
+
