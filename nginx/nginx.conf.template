@@ -20,12 +20,12 @@ stream {
 
     # reality fallback to xray
     upstream reality {
-        server 127.0.0.1:2992;
+        server vps-xray:2992;
     }
 
     # websocket fallback to xray
     upstream websocket {
-        server 127.0.0.1:4075;
+        server vps-xray:4075;
     }
 
     # server listening on port 443 for SNI routing
@@ -57,7 +57,7 @@ http {
 
         # default fallback -> static webpage 
         server {
-                listen 127.0.0.1:5424;
+                listen 5424;  # Listen on all interfaces instead of just 127.0.0.1
                 root /usr/share/nginx/webpage;
                 index index.html;
                 add_header Strict-Transport-Security "max-age=63072000" always;

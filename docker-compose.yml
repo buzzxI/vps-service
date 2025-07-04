@@ -41,7 +41,7 @@ services:
     volumes:
       - ./xray/config.json.template:/etc/xray/config.json.template:ro
       - ./xray/logs:/var/log/xray
-      - ./ssl:/etc/xray/ssl:ro # Read-only access to SSL certificates
+      - /etc/ssl/certs/${DOMAIN}:/etc/xray/ssl:ro # Read-only access to SSL certificates
       - ./xray/data:/etc/xray/data # Persistent data directory
     environment:
       - DOMAIN=${DOMAIN}
@@ -106,7 +106,7 @@ services:
     volumes:
       - ./hysteria2/config.yaml.template:/etc/hysteria/config.yaml.template:ro
       - ./hysteria2/data:/etc/hysteria/data
-      - ./ssl:/etc/hysteria/ssl:ro
+      - /etc/ssl/certs/${DOMAIN}:/etc/hysteria/ssl:ro
     networks:
       - vps-network
     environment:
