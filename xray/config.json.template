@@ -68,7 +68,7 @@
         "decryption": "none",
         "fallbacks": [
           {
-            "dest": 5424 // default fallback to nginx (static webpage)
+            "dest": "vps-nginx:5424" // default fallback to nginx
           },
           {
             "path": "/websocket", // path '/websocket' falls back to websocket config

@@ -17,6 +17,9 @@ services:
     networks:
       - vps-network
     restart: unless-stopped
+    depends_on:
+      - xray
+      - openlist
     command: >
       sh -c "
         # Install envsubst (gettext package)
@@ -152,6 +155,8 @@ services:
       - PGID=0
       - UMASK=022
     restart: unless-stopped
+    networks:
+      - vps-network
 
 networks:
   vps-network:
