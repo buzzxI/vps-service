@@ -13,7 +13,7 @@ lets get back to this script, before your deployment, you should install the ssl
 
 > the path can be changed, but you need to change docker-compose file
 
-and you should export your domain to default shell: bash, zsh ... just add one line: `export DOMAIN={your-domain}` to your shell .xxrc, and make it happen
+and you should export your domain to default shell: bash, zsh ... just add ~~one~~ two line: `export DOMAIN={your-domain}` and `export REALITY_DOMAIN={your-reality-domain}`to your shell .xxrc, and make it happen
 
 the docker compose deploy three entries:
 
