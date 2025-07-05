@@ -105,7 +105,7 @@ services:
         apk add --no-cache gettext
         
         # Generate config from template with environment variables
-        envsubst '$${DOMAIN} $${REALITY_DOMAIN} $${XRAY_UUID} $${REALITY_PRIVATE_KEY}' < /etc/xray/config.json.template > /etc/xray/config.json
+        envsubst '$${DOMAIN} $${REALITY_DOMAIN} $${XRAY_UUID} $${REALITY_PRIVATE_KEY} $${WEBSOCKET_PATH}' < /etc/xray/config.json.template > /etc/xray/config.json
         
         # Start Xray
         exec xray run -c /etc/xray/config.json
