@@ -82,14 +82,24 @@ services:
           echo 'Reality key pair generated and saved:'
           echo 'Private key saved to /etc/xray/data/reality_private.key'
           echo 'Public key saved to /etc/xray/data/reality_public.key'
+
+        fi
+
+        # Generate WebSocket path if it doesn't exist
+        if [ ! -f /etc/xray/data/websocket_path.txt ]; then
+          echo 'Generating new WebSocket path for Xray...'
+          tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32 > /etc/xray/data/websocket_path.txt
+          echo 'WebSocket path generated and saved to /etc/xray/data/websocket_path.txt'
         fi
         
         # Read generated values and export them
         export XRAY_UUID=$$(cat /etc/xray/data/uuid.txt)
         export REALITY_PRIVATE_KEY=$$(cat /etc/xray/data/reality_private.key)
-        
+        export WEBSOCKET_PATH=$$(cat /etc/xray/data/websocket_path.txt)
+
         echo 'Using UUID:' $$XRAY_UUID
         echo 'Using Reality Private Key:' $$REALITY_PRIVATE_KEY
+        echo 'Using WebSocket Path:' $$WEBSOCKET_PATH
         
         # Install envsubst (gettext package)
         apk add --no-cache gettext
