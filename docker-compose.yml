@@ -58,24 +58,25 @@ services:
         mkdir -p /etc/xray/data
         
         # Generate UUID if it doesn't exist
-        if [ ! -f /etc/xray/data/uuid.txt ]; then
+        if [ ! -f /etc/xray/data/uuid.txt ] || [ ! -s /etc/xray/data/uuid.txt ]; then
           echo 'Generating new UUID for Xray...'
           xray uuid > /etc/xray/data/uuid.txt
           echo 'UUID generated and saved to /etc/xray/data/uuid.txt'
         fi
         
         # Generate x25519 key pair for Reality if it doesn't exist
-        if [ ! -f /etc/xray/data/reality_private.key ] || [ ! -f /etc/xray/data/reality_public.key ]; then
+        if [ ! -f /etc/xray/data/reality_private.key ] || [ ! -s /etc/xray/data/reality_private.key ] || 
+         [ ! -f /etc/xray/data/reality_public.key ] || [ ! -s /etc/xray/data/reality_public.key ]; then
           echo 'Generating new x25519 key pair for Reality...'
           # Generate key pair and save to temporary file
           xray x25519 > /etc/xray/data/key_output.txt
           
           # Extract private key 
-          grep 'Private key:' /etc/xray/data/key_output.txt | cut -d' ' -f3 > /etc/xray/data/reality_private.key
+          grep 'PrivateKey:' /etc/xray/data/key_output.txt | sed 's/^[^:]*: *//' > /etc/xray/data/reality_private.key
           
           # Extract public key
-          grep 'Public key:' /etc/xray/data/key_output.txt | cut -d' ' -f3 > /etc/xray/data/reality_public.key
-          
+          grep 'Password:' /etc/xray/data/key_output.txt | sed 's/^[^:]*: *//' > /etc/xray/data/reality_public.key
+
           # Clean up temporary file
           #rm /etc/xray/data/key_output.txt
           
@@ -124,6 +125,7 @@ services:
       - vps-network
     environment:
       - REALITY_DOMAIN=${REALITY_DOMAIN}
+      - DOMAIN=${DOMAIN}
     restart: unless-stopped
     entrypoint: /bin/sh
     command: >
@@ -154,15 +156,14 @@ services:
       "
 
   openlist:
-    image: 'openlistteam/openlist:beta-aio'
+    image: 'openlistteam/openlist:latest'
     container_name: vps-openlist
+    user: '0:0'
     volumes:
       - './openlist/data:/opt/openlist/data'
     expose:
       - '5244'
     environment:
-      - PUID=0
-      - PGID=0
       - UMASK=022
     restart: unless-stopped
     networks:

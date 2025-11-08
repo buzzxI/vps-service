@@ -15,4 +15,3 @@ masquerade: # 伪装
   proxy:
     url: https://${REALITY_DOMAIN}
     rewriteHost: true
-    insecure: false
