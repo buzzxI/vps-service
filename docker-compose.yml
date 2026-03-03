@@ -14,6 +14,8 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
       - REALITY_DOMAIN=${REALITY_DOMAIN}
+    env_file:
+      - .env
     networks:
       - vps-network
     restart: unless-stopped
@@ -49,6 +51,8 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
       - REALITY_DOMAIN=${REALITY_DOMAIN}
+    env_file:
+      - .env
     networks:
       - vps-network
     restart: unless-stopped
@@ -126,6 +130,8 @@ services:
     environment:
       - REALITY_DOMAIN=${REALITY_DOMAIN}
       - DOMAIN=${DOMAIN}
+    env_file:
+      - .env
     restart: unless-stopped
     entrypoint: /bin/sh
     command: >
